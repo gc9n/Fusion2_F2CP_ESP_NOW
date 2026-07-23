@@ -1,0 +1,2 @@
+# Fusion2_F2CP_ESP_NOW
+Headless ESP32-family serial controller for Fusion2 using secure F2CP over ESP-NOW. Automatic pairing, channel discovery, tuning, spectrum scans, AutoLock and live events.
