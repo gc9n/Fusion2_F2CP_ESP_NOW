@@ -1,0 +1,29 @@
+Fusion2_F2CP_ESP_NOW direct firmware API
+===========================================
+
+Added:
+- include/Fusion2F2CP.h
+- examples/TuneFromCode.cpp
+- Fusion2F2CP_IsPaired()
+- Fusion2F2CP_IsConnected()
+- Fusion2F2CP_Tune(uint16_t mhz, bool save)
+
+Direct tune example:
+    if (Fusion2F2CP_IsConnected()) {
+        Fusion2F2CP_Tune(5880, true);
+    }
+
+The command does not use serial input. It sends the same secure F2CP tune
+request as the serial command "tune 5880".
+
+The save parameter:
+- true  = tune and save in Fusion2
+- false = temporary tune without saving
+
+Call the API from normal loop/task context. Do not call it from an ISR or
+directly from an ESP-NOW callback.
+
+Validation:
+- main.cpp passed strict C++17 syntax validation with warnings as errors.
+- examples/TuneFromCode.cpp passed strict C++17 syntax validation.
+- ZIP integrity was verified.

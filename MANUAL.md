@@ -26,13 +26,18 @@ Fusion2_F2CP_ESP_NOW/
 ├── README.md
 ├── MANUAL.md
 ├── GITHUB_DESCRIPTION.txt
+├── include/
+│   └── Fusion2F2CP.h
+├── examples/
+│   └── TuneFromCode.cpp
 └── src/
     └── main.cpp
 ```
 
 The firmware is intentionally compact. `main.cpp` contains the ESP-NOW
 transport, pairing, session security, NVS storage, serial parser and F2CP command
-handling.
+handling. `include/Fusion2F2CP.h` exposes the small application-facing API for
+sending commands directly from firmware code.
 
 ## 4. Selecting the board
 
@@ -180,7 +185,80 @@ pairing window to pair again.
 help
 ```
 
-## 9. Fusion2 events
+## 9. Sending commands directly from code
+
+The serial parser is only one way to use the controller. Firmware code can call
+the public API declared in:
+
+```text
+include/Fusion2F2CP.h
+```
+
+Available functions in this release:
+
+```cpp
+bool Fusion2F2CP_IsPaired();
+bool Fusion2F2CP_IsConnected();
+bool Fusion2F2CP_Tune(uint16_t mhz, bool save = true);
+```
+
+### One-shot tune example
+
+```cpp
+#include "Fusion2F2CP.h"
+
+void loop()
+{
+    static bool commandSent = false;
+
+    if (!commandSent && Fusion2F2CP_IsConnected()) {
+        commandSent = Fusion2F2CP_Tune(5880, true);
+    }
+}
+```
+
+This sends the same F2CP tune request as:
+
+```text
+tune 5880
+```
+
+but it does not use the serial terminal or serial command parser.
+
+The `save` parameter controls Fusion2 persistence:
+
+```cpp
+Fusion2F2CP_Tune(5880, true);   // Tune and save in Fusion2
+Fusion2F2CP_Tune(5880, false);  // Temporary tune, do not save
+```
+
+The function waits for Fusion2's acknowledgement and returns `true` when the
+expected response is received. It returns `false` when there is no active secure
+session, the frequency is invalid or Fusion2 does not acknowledge the command.
+
+### Triggering from application logic
+
+The same call can be placed behind a GPIO event, timer, sensor threshold or
+application state transition:
+
+```cpp
+if (buttonPressed && Fusion2F2CP_IsConnected()) {
+    Fusion2F2CP_Tune(5800, true);
+}
+```
+
+Do not call the command repeatedly on every pass through `loop()`. Use a
+one-shot flag or edge detection. The command API is blocking while it waits for
+the response, so call it only from normal loop/task context—not from an ISR and
+not directly from an ESP-NOW receive callback.
+
+A retry-safe implementation is provided in:
+
+```text
+examples/TuneFromCode.cpp
+```
+
+## 10. Fusion2 events
 
 Fusion2 can communicate with the controller without waiting for a new serial
 command. The serial terminal may receive:
@@ -192,7 +270,7 @@ AUTOLOCK FOUND: 5880 MHz R7, A=88 B=84
 OPERATION: 2 START
 ```
 
-## 10. Wi-Fi channel behavior
+## 11. Wi-Fi channel behavior
 
 During pairing, the controller scans channels 1 through 13. After pairing, it
 stores the last successful channel. If Fusion2 later changes channel, the
@@ -201,7 +279,7 @@ controller probes all channels until it restores the secure session.
 When Fusion2 uses legacy ELRS Backpack compatibility, Fusion2 may force channel
 1. The controller does not require a fixed channel and will still find it.
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 ### `Serial` is not declared
 
@@ -233,7 +311,7 @@ the secure session.
 Find the board's PlatformIO identifier and create a new environment by copying
 the nearest supplied configuration.
 
-## 12. Extending the project
+## 13. Extending the project
 
 New F2CP commands can be added to the serial parser in `runCommand()` and decoded
 in `printResponse()`. Existing command IDs and packet formats should remain

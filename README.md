@@ -31,10 +31,11 @@ PlatformIO board ID. A board must provide 2.4 GHz Wi-Fi and ESP-NOW support.
 - AutoLock start, next, accept and cancel commands
 - Live frequency, scan, AutoLock and operation events from Fusion2
 - Headless operation through a standard serial terminal
+- Direct firmware API for sending commands without serial input
 
 ## Repository description
 
-> Headless ESP32-family serial controller for Fusion2 using secure F2CP over ESP-NOW. Supports automatic pairing, channel discovery, tuning, spectrum scans, AutoLock and live Fusion2 events.
+> Headless ESP32-family controller for Fusion2 using secure F2CP over ESP-NOW. Supports automatic pairing, serial commands, direct firmware API control, tuning, spectrum scans, AutoLock and live events.
 
 ## Choose a PlatformIO environment
 
@@ -111,6 +112,36 @@ cancel
 forget
 help
 ```
+
+## Sending a command directly from firmware code
+
+Serial input is optional. Application code can send an F2CP tune request directly
+through the public API in `include/Fusion2F2CP.h`.
+
+```cpp
+#include "Fusion2F2CP.h"
+
+void loop()
+{
+    static bool tuned = false;
+
+    if (!tuned && Fusion2F2CP_IsConnected()) {
+        tuned = Fusion2F2CP_Tune(5880, true);
+    }
+}
+```
+
+`Fusion2F2CP_Tune(5880, true)` requests 5880 MHz and asks Fusion2 to save the
+frequency. Use `false` as the second argument for a temporary tune that is not
+saved by Fusion2.
+
+Do not send the command continuously on every loop iteration. Trigger it from a
+one-shot flag, timer, GPIO button, sensor condition, application state change or
+another normal FreeRTOS task. Do not call the blocking command API from an ISR or
+directly from an ESP-NOW callback.
+
+A complete retry-safe example is included in
+[`examples/TuneFromCode.cpp`](examples/TuneFromCode.cpp).
 
 ## Communication direction
 

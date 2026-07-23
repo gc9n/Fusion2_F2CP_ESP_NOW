@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "Fusion2F2CP.h"
 #include <Preferences.h>
 #include <WiFi.h>
 #include <ctype.h>
@@ -640,8 +641,8 @@ void runCommand(char *line) {
     else if (!strcasecmp(command, "tune")) {
         char *value = strtok_r(nullptr, " \t", &context);
         if (!value) { Serial.println("Usage: tune <MHz>"); return; }
-        TuneRequest request{static_cast<uint16_t>(strtoul(value, nullptr, 10)), KEEP_BAND, 1};
-        sendCommand(T_TUNE, &request, sizeof(request), T_ACK, 1800);
+        (void)::Fusion2F2CP_Tune(
+                static_cast<uint16_t>(strtoul(value, nullptr, 10)), true);
     } else if (!strcasecmp(command, "scan")) {
         char *start = strtok_r(nullptr, " \t", &context);
         char *stop = strtok_r(nullptr, " \t", &context);
@@ -723,6 +724,35 @@ bool initializeRadio() {
 
 } // namespace
 
+bool Fusion2F2CP_IsPaired()
+{
+    return paired;
+}
+
+bool Fusion2F2CP_IsConnected()
+{
+    return paired && sessionReady;
+}
+
+bool Fusion2F2CP_Tune(uint16_t mhz, bool save)
+{
+    /* Reject values that are clearly outside the supported 5.8 GHz receiver
+     * operating area. Fusion2 performs the final frequency validation.
+     */
+    if (mhz < 5000u || mhz > 6500u) {
+        Serial.printf("Code API: invalid tune frequency %u MHz.\n", mhz);
+        return false;
+    }
+
+    TuneRequest request{
+        mhz,
+        KEEP_BAND,
+        static_cast<uint8_t>(save ? 1u : 0u)
+    };
+
+    return sendCommand(T_TUNE, &request, sizeof(request), T_ACK, 1800u);
+}
+
 void setup() {
     Serial.begin(115200);
     const uint32_t waitStarted = millis();
@@ -737,7 +767,7 @@ void setup() {
 
     txSequence = esp_random();
     nextTransaction = esp_random();
-    Serial.println("\nFusion2 F2CP ESP-NOW controller v1.4");
+    Serial.println("\nFusion2 F2CP ESP-NOW controller v1.5");
     Serial.print("Controller MAC: ");
     printMac(localMac);
     Serial.printf("\nPaired: %s, current Wi-Fi channel: %u\n", paired ? "YES" : "NO", currentChannel);
@@ -750,6 +780,16 @@ void setup() {
 
 void loop() {
     processRx();
+
+    /* Direct firmware-control example:
+     *
+     *     if (Fusion2F2CP_IsConnected())
+     *         Fusion2F2CP_Tune(5880, true);
+     *
+     * Do not call it unconditionally on every loop iteration. Use an event,
+     * state change, button action, timer, or one-shot guard. A complete
+     * one-shot example is provided in examples/TuneFromCode.cpp.
+     */
     serviceSerial();
 
     const uint32_t now = millis();
